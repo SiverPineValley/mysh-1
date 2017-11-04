@@ -59,9 +59,10 @@ int evaluate_command(int n_commands, struct single_command (*commands)[512])
 			int pid = fork();
 			if ( pid > 0 ) wait(&status);
 			else if ( pid == 0  ) execv(com->argv[0],com->argv);
-			else {
+			else {  
+				//If Fork error is occured, this function returns -1.
 				perror("Fork error");
-				return(-1);
+				return -1;
 			}
 			return 0;
 		}
