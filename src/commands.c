@@ -79,8 +79,21 @@ int evaluate_command(int n_commands, struct single_command (*commands)[512])
 			//This part takes charge of the creation of one new process.
 		else if ( (( !S_ISDIR(buf[0].st_mode) ) && access( com->argv[0] , R_OK ) == 0 ) ) {			
 				pid = fork();
-				if ( pid > 0 ) wait(&status);
-				else if ( pid == 0 ) execv(com->argv[0],com->argv);
+				if ( pid > 0 ) {
+					/*if( back ) {
+						printf("%d\n",pid);
+						wait(&status);
+					}
+					else*/ wait(&status);
+					}
+				else if ( pid == 0 ) {
+					/*if( back  ) {
+					fclose(stdin);
+					fopen("/dev/null","r");
+					execv(com->argv[0],com->argv);
+					}
+					else*/ execv(com->argv[0],com->argv);
+				}
 				else {
 				perror("Fork error");
 				return -1;
@@ -169,7 +182,6 @@ void pipe_commands( int n_commands, struct single_command (*com) ) {
 		sleep(1);
 		int client_socket;
 		struct sockaddr_un server_sockaddr;
-		char buffer[BUFF_SIZE+5];
 		
 		client_socket = socket(PF_FILE, SOCK_STREAM, 0);
 		memset(&server_sockaddr, 0, sizeof(server_sockaddr));
@@ -203,7 +215,6 @@ void *pipe_server(struct single_command (*com)) {
 	int server_socket, client_socket, client_size, status, rc;
 	struct sockaddr_un server_sockaddr;
 	struct sockaddr_un client_sockaddr;
-	char buff_server[BUFF_SIZE+5], buff_client[BUFF_SIZE+5];
 	
 	memcpy(data,com+1,sizeof(struct single_command)*511);
 
@@ -242,7 +253,11 @@ int isBack( struct single_command (*com), int n_commands  ) {
 	int result = 0;
 	for( int i = 0; i < n_commands; i++ ) {
 		for( int j = 0; j < com[i].argc; j++  ) {
-			if( strcmp(com[i].argv[j],"&") == 0 ) result++;
+			if( strcmp(com[i].argv[j],"&") == 0 ) { 
+			result++;
+			com[i].argc--;
+			free(com[i].argv[j]);
+			}
 		}
 		if( result > 0 ) break;
 	}
