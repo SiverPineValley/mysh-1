@@ -175,15 +175,14 @@ void pipe_commands( int n_commands, struct single_command (*com) ) {
 	int pid, pid2, status;
 	pthread_t th;
 	pthread_create(&th, NULL, pipe_server, com);
-	
+	//Make new client socket
 	pid = fork();
 	if( pid == 0 ) {
-		//synchronization problem...
 		sleep(1);
 		int client_socket;
 		struct sockaddr_un server_sockaddr;
 		
-		client_socket = socket(PF_FILE, SOCK_STREAM, 0);
+		client_socket = socket(AF_UNIX, SOCK_STREAM, 0);
 		memset(&server_sockaddr, 0, sizeof(server_sockaddr));
 		server_sockaddr.sun_family = AF_UNIX;
 		strcpy(server_sockaddr.sun_path, SOCK_PATH);
@@ -191,35 +190,31 @@ void pipe_commands( int n_commands, struct single_command (*com) ) {
 			printf("Connection failed!!\n");
 			exit(1);
 		}
-		pid2 = fork();
-		if(pid2 == 0) {
-			//Close the file descriptor stdin, stdout
-			close(STDIN_FILENO);
-			close(STDOUT_FILENO);
-			if ( dup2(client_socket, STDOUT_FILENO) == -1  ) {
-				printf("Connect Stdin to stdout is failed!!\n");
-				exit(1);
-			}		
-			evaluate_command(1,com);
-			exit(0);
-		}
-		wait(&status);
+		//Client Socket
+		close(STDIN_FILENO);
+		close(STDOUT_FILENO);
+		if ( dup2(client_socket, STDOUT_FILENO) == -1  ) {
+			printf("Connect Stdin to stdout is failed!!\n");
+			exit(1);
+		}		
+		evaluate_command(1,com);
 		close(client_socket);
-		exit(0);
+		exit(0); //Close the child process
 	}
 	else wait(&status);
 	pthread_join(th,  NULL);
 }
+//Make new server socket
 void *pipe_server(struct single_command (*com)) {
 	struct single_command data[512] = {};
-	int server_socket, client_socket, client_size, status, rc;
+	int server_socket, client_socket, client_size, status, rc, pid;
 	struct sockaddr_un server_sockaddr;
 	struct sockaddr_un client_sockaddr;
 	
 	memcpy(data,com+1,sizeof(struct single_command)*511);
 
 	if( access(SOCK_PATH, F_OK ) == 0  ) unlink(SOCK_PATH);
-	server_socket = socket(PF_FILE, SOCK_STREAM, 0);
+	server_socket = socket(AF_UNIX, SOCK_STREAM, 0);
 	memset(&server_sockaddr, 0, sizeof(server_sockaddr));
 	server_sockaddr.sun_family = AF_UNIX;
 	strcpy(server_sockaddr.sun_path, SOCK_PATH);
@@ -236,14 +231,15 @@ void *pipe_server(struct single_command (*com)) {
 			exit(1);
 		}
 		client_socket = accept(server_socket, (struct sockaddr*)&client_sockaddr, &client_size);
-		assert(client_socket != -1);
-		if( fork() == 0 ) {
+		Server Socket
+		pid = fork();
+		if( pid == 0 ) {
 			close(STDIN_FILENO);
 			dup2(client_socket, STDIN_FILENO);
 			evaluate_command(1, data);
 			exit(0);  
 		}
-		wait(&status);
+		if( pid > 0 ) wait(&status);
 		close(client_socket);
 		pthread_exit(0);
 	}
